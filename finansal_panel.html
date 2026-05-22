@@ -177,7 +177,9 @@ tbody tr:hover td{background:rgba(255,255,255,.018)}
     <div class="nav-btn" data-p="zaman" onclick="gp(this)"><span class="ni">◎</span>Zaman Serisi</div>
   </div>
   <div class="sb-foot">
-    <button class="btn-save" onclick="kaydet()">💾 Kaydet</button>
+    <button class="btn-save" onclick="sheetsKaydet()">☁ Sheets'e Kaydet</button>
+    <button class="btn-undo" style="border-color:#4090f0;color:#4090f0" onclick="sheetsYukle()">↓ Sheets'ten Yükle</button>
+    <button class="btn-undo" onclick="kaydet()">💾 Yerel Kaydet</button>
     <button class="btn-undo" onclick="geriAl()">↩ Geri Al</button>
     <div class="save-info" id="si-save"></div>
   </div>
@@ -205,10 +207,11 @@ tbody tr:hover td{background:rgba(255,255,255,.018)}
       </div>
     </div>
     <div class="px-row">
-      <div class="px-item"><div class="px-lbl">USD/TRY</div><div class="px-val" id="px-usd">—</div></div>
-      <div class="px-item"><div class="px-lbl">24 Ayar Gram</div><div class="px-val" id="px-au24">—</div><div class="px-sub">₺/gram</div></div>
-      <div class="px-item"><div class="px-lbl">22 Ayar Gram</div><div class="px-val" id="px-au22">—</div><div class="px-sub">₺/gram</div></div>
-      <div class="px-item"><div class="px-lbl">Çeyrek Altın</div><div class="px-val" id="px-ceyrek">—</div><div class="px-sub">₺/adet</div></div>
+      <div class="px-item"><div class="px-lbl">USD/TRY</div><div class="px-val" id="px-usd">—</div><input id="inp-usd" type="number" step="0.0001" placeholder="yeni değer..." style="width:100px;background:#1a1e28;border:1px solid #2a3045;color:#dde1ec;border-radius:4px;padding:4px 7px;font-size:11px;margin-top:5px;display:block"></div>
+      <div class="px-item"><div class="px-lbl">24 Ayar Gram</div><div class="px-val" id="px-au24">—</div><div class="px-sub">₺/gram</div><input id="inp-au24" type="number" step="1" placeholder="yeni değer..." style="width:110px;background:#1a1e28;border:1px solid #2a3045;color:#dde1ec;border-radius:4px;padding:4px 7px;font-size:11px;margin-top:5px;display:block"></div>
+      <div class="px-item"><div class="px-lbl">22 Ayar Gram</div><div class="px-val" id="px-au22">—</div><div class="px-sub">₺/gram</div><input id="inp-au22" type="number" step="1" placeholder="yeni değer..." style="width:110px;background:#1a1e28;border:1px solid #2a3045;color:#dde1ec;border-radius:4px;padding:4px 7px;font-size:11px;margin-top:5px;display:block"></div>
+      <div class="px-item"><div class="px-lbl">Çeyrek Altın</div><div class="px-val" id="px-ceyrek">—</div><div class="px-sub">₺/adet</div><input id="inp-ceyrek" type="number" step="1" placeholder="yeni değer..." style="width:110px;background:#1a1e28;border:1px solid #2a3045;color:#dde1ec;border-radius:4px;padding:4px 7px;font-size:11px;margin-top:5px;display:block"></div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:8px"><button onclick="fiyatGuncelle()" style="background:#bld;border:1px solid #4090f0;color:#4090f0;font-family:Syne,sans-serif;font-size:12px;font-weight:700;padding:8px 14px;border-radius:6px;cursor:pointer;white-space:nowrap">✓ Uygula</button></div>
     </div>
   </div>
 
@@ -351,56 +354,13 @@ function gp(el){
 // FİYAT ÇEKİMİ
 // ============================================================
 async function fetchPrices(){
-  PX.status='loading'; render();
-  try{
-    const hisseSembolleri = D.midas.filter(m=>m.tip==='hisse').map(m=>m.ad).join(', ');
-    const kriptoSembolleri = D.midas.filter(m=>m.tip==='kripto').map(m=>m.ad).join(', ');
-    
-    const prompt = `Şu an Türkiye saati ile güncel finansal verileri JSON formatında ver. Sadece JSON döndür, başka hiçbir şey yazma:
-{
-  "usd_try": <güncel USD/TRY kuru>,
-  "altin_24_gram_tl": <güncel 24 ayar gram altın TL fiyatı>,
-  "altin_22_gram_tl": <güncel 22 ayar gram altın TL fiyatı>,
-  "ceyrek_altin_tl": <güncel çeyrek altın TL fiyatı>,
-  "hisseler": {${hisseSembolleri ? `"${hisseSembolleri.split(', ').join('": <USD fiyatı>, "')}"`: ''}},
-  "kriptolar": {${kriptoSembolleri ? `"${kriptoSembolleri.split(', ').join('": <USD fiyatı>, "')}"`: ''}}
-}
-Gerçek güncel verileri kullan. Tahmini değil.`;
-
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        tools: [{type: 'web_search_20250305', name: 'web_search'}],
-        messages: [{role: 'user', content: prompt}]
-      })
-    });
-    
-    const data = await resp.json();
-    const text = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
-    const clean = text.replace(/```json|```/g,'').trim();
-    const px = JSON.parse(clean);
-    
-    PX.usd = px.usd_try || 45.59;
-    PX.au24 = px.altin_24_gram_tl || 6851;
-    PX.au22 = px.altin_22_gram_tl || PX.au24*(22/24);
-    PX.ceyrek = px.ceyrek_altin_tl || PX.au24*1.7501;
-    
-    if(px.hisseler) Object.entries(px.hisseler).forEach(([k,v])=>{ if(v) PX.stocks[k]=v; });
-    if(px.kriptolar) Object.entries(px.kriptolar).forEach(([k,v])=>{ if(v) PX.stocks[k]=v; });
-    
-    PX.ok=true; PX.status='ok'; PX.time=new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
-  } catch(e){
-    console.error('Fiyat çekme hatası:', e);
-    PX.status='err';
-    PX.usd=PX.usd||45.59; PX.au24=PX.au24||6851;
-    PX.au22=PX.au22||PX.au24*(22/24); PX.ceyrek=PX.ceyrek||PX.au24*1.7501;
-  }
+  PX.status='manual';
+  const f=localStorage.getItem('fp_fiyatlar');
+  if(f){try{const p=JSON.parse(f);PX.usd=p.usd||45.59;PX.au24=p.au24||6851;PX.au22=p.au22||PX.au24*(22/24);PX.ceyrek=p.ceyrek||PX.au24*1.7501;}catch(e){}}
+  else{PX.usd=45.59;PX.au24=6851;PX.au22=PX.au24*(22/24);PX.ceyrek=PX.au24*1.7501;}
+  PX.ok=true;PX.time=nowStr();
   render();
 }
-
 
 function setBadge(id, cls, html){
   const el=document.getElementById(id);
@@ -970,15 +930,70 @@ function cizGrafik(arr){
 // ============================================================
 // KAYDET / YÜKLE
 // ============================================================
+// Sheets URL - bir kez girince saklanır
+let SHEETS_URL = localStorage.getItem('fp_sheets_url')||'';
+
 function kaydet(){
-  try{
-    localStorage.setItem('fp_v3',JSON.stringify(D));
-    document.getElementById('si-time').textContent=nowStr()+' kaydedildi';
-    si('✓ Kaydedildi');
-  }catch(e){si('Hata: '+e.message);}
+  localStorage.setItem('fp_v3',JSON.stringify(D));
+  document.getElementById('si-time').textContent=nowStr()+' kaydedildi';
+  si('✓ Yerel kaydedildi');
 }
 function yukle(){
   try{ const s=localStorage.getItem('fp_v3'); if(s) D=JSON.parse(s); }catch(e){}
+}
+
+async function sheetsKaydet(){
+  if(!SHEETS_URL){
+    const url=prompt('Google Apps Script Web URL\'ini gir (ilk kez):');
+    if(!url)return;
+    SHEETS_URL=url.trim();
+    localStorage.setItem('fp_sheets_url',SHEETS_URL);
+  }
+  try{
+    si('⟳ Kaydediliyor...');
+    const veri=JSON.stringify({
+      bilanco:D.bilanco, donemler:D.donemler, midas:D.midas, zaman:D.zaman,
+      fiyatlar:{usd_try:PX.usd,altin_24:PX.au24,altin_22:PX.au22,ceyrek:PX.ceyrek}
+    });
+    const r=await fetch(SHEETS_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'fp2026',veri})});
+    const j=await r.json();
+    if(j.ok){kaydet();si('☁ Sheets\'e kaydedildi — '+nowStr());}
+    else si('⚠ Hata: '+(j.error||'bilinmiyor'));
+  }catch(e){kaydet();si('⚠ Sheets hatası, yerel kaydedildi');}
+}
+
+async function sheetsYukle(){
+  if(!SHEETS_URL){si('⚠ Önce Sheets\'e kaydet');return;}
+  try{
+    si('⟳ Yükleniyor...');
+    const r=await fetch(SHEETS_URL+'?key=fp2026&t='+Date.now());
+    const j=await r.json();
+    if(j.ok&&j.veri){
+      const yeni=JSON.parse(j.veri);
+      if(yeni.bilanco)D.bilanco=yeni.bilanco;
+      if(yeni.donemler)D.donemler=yeni.donemler;
+      if(yeni.midas)D.midas=yeni.midas;
+      if(yeni.zaman)D.zaman=yeni.zaman;
+      if(yeni.fiyatlar){PX.usd=yeni.fiyatlar.usd_try||PX.usd;PX.au24=yeni.fiyatlar.altin_24||PX.au24;PX.au22=yeni.fiyatlar.altin_22||PX.au22;PX.ceyrek=yeni.fiyatlar.ceyrek||PX.ceyrek;}
+      render();si('✓ Yüklendi — '+nowStr());
+    }else si('⚠ Veri alınamadı');
+  }catch(e){si('⚠ Bağlantı hatası');}
+}
+
+function fiyatGuncelle(){
+  const usd=parseFloat(document.getElementById('inp-usd')?.value);
+  const au24=parseFloat(document.getElementById('inp-au24')?.value);
+  const au22=parseFloat(document.getElementById('inp-au22')?.value);
+  const ceyrek=parseFloat(document.getElementById('inp-ceyrek')?.value);
+  if(!isNaN(usd)&&usd>0)PX.usd=usd;
+  if(!isNaN(au24)&&au24>0)PX.au24=au24;
+  if(!isNaN(au22)&&au22>0)PX.au22=au22;
+  if(!isNaN(ceyrek)&&ceyrek>0)PX.ceyrek=ceyrek;
+  if(!PX.au22&&PX.au24)PX.au22=PX.au24*(22/24);
+  if(!PX.ceyrek&&PX.au24)PX.ceyrek=PX.au24*1.7501;
+  localStorage.setItem('fp_fiyatlar',JSON.stringify({usd:PX.usd,au24:PX.au24,au22:PX.au22,ceyrek:PX.ceyrek}));
+  PX.status='manual';PX.time=nowStr();
+  render();si('✓ Fiyatlar güncellendi');
 }
 function renderAll(){
   renderBilanco();
